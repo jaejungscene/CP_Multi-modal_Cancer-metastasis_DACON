@@ -1,0 +1,86 @@
+
+import os
+import cv2
+import pandas as pd
+import torch
+import torch.nn as nn
+import albumentations as A
+from albumentations.pytorch.transforms import ToTensorV2
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from torch.utils.data import Dataset, DataLoader
+from preprocess import *
+
+
+class CustomDataset(Dataset):
+    def __init__(self, medical_df, labels, args ,transforms = None):
+        self.medical_df = medical_df
+        self.transforms = transforms
+        self.labels = labels
+        self.tile = args.tile
+    
+    def __getitem__(self, index):
+        img_path = self.medical_df["img_path"].iloc[index]
+        
+        images = np.load(img_path)
+        
+        if self.labels is not None:
+            tabular = torch.Tensor(self.medical_df.drop(columns=['ID', 'img_path', 'mask_path', '수술연월일']).iloc[index, :].to_numpy())
+            label = self.labels.iloc[index].to_numpy()
+            return images, tabular, label
+            
+        else:
+            tabular = torch.Tensor(self.medical_df.drop(columns=['ID', 'img_path', '수술연월일']).iloc[index, :])
+            return images, tabular
+    
+    def __len__(self):
+        return len(self.medical_df)
+
+def get_dataloader(train_data, valid_data, train_label, valid_label, args):
+    train_dataset, valid_dataset = CustomDataset(train_data, train_label, args), CustomDataset(valid_data, valid_label, args)
+    dl_train, dl_valid = DataLoader(train_dataset, batch_size = args.batchsize, pin_memory = True, shuffle = True), DataLoader(valid_dataset, batch_size = args.batchsize, pin_memory = True)
+    return dl_train, dl_valid
+
+
+numeric_cols = ['나이', '암의 장경', 'ER_Allred_score', 'PR_Allred_score', 'KI-67_LI_percent', 'HER2_SISH_ratio']
+ignore_cols = ['ID', 'img_path', 'mask_path', '수술연월일', 'N_category']
+
+def get_values(value):
+    return value.values.reshape(-1, 1)
+
+def preprocess_dataset(train_df, test_df):
+    train_df["img_path"] = "data" + train_df["img_path"].str.replace("./", "/", regex = True)
+    test_df["img_path"] = "data" + test_df["img_path"].str.replace("./", "/", regex = True)
+
+    train_df["img_path"] = train_df["img_path"].str.replace("train_img", "refine_train_img")
+    test_df["img_path"] = test_df["img_path"].str.replace("test_img", "refine_test_img")
+
+    train_df["img_path"] = train_df["img_path"].str.replace("png", "npy")
+    test_df["img_path"] = test_df["img_path"].str.replace("png", "npy")
+    
+    train_df['암의 장경'] = train_df['암의 장경'].fillna(train_df['암의 장경'].mean())
+    train_df = train_df.fillna(0)
+
+    test_df['암의 장경'] = test_df['암의 장경'].fillna(train_df['암의 장경'].mean())
+    test_df = test_df.fillna(0)
+
+
+    for col in train_df.columns:
+        if col in ignore_cols:
+            continue
+        if col in numeric_cols:
+            scaler = StandardScaler()
+            train_df[col] = scaler.fit_transform(get_values(train_df[col]))
+            test_df[col] = scaler.transform(get_values(test_df[col]))
+        else:
+            le = LabelEncoder()
+            train_df[col] = le.fit_transform(get_values(train_df[col]))
+            test_df[col] = le.transform(get_values(test_df[col]))
+
+    return train_df, test_df
+
+
+def load_dataset(args):
+    train_df, test_df = pd.read_csv(os.path.join("data", "train.csv")), pd.read_csv(os.path.join("data", "test.csv"))
+    train_df, test_df = preprocess_dataset(train_df, test_df)
+    return train_df, test_df
+     
