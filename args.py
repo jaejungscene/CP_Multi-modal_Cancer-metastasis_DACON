@@ -18,6 +18,20 @@ def get_args_parser():
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='W', help='number of data loading workers (default: 4)')
 
 
+    optimizer = parser.add_argument_group('optimizer')
+    optimizer.add_argument('--lr', type=float, default=1e-3, help='learning rate(lr)')
+    optimizer.add_argument('--epochs', type=int, default=100, help='epoch')
+    optimizer.add_argument('--optimizer', type=str, default='adamw', help='optimizer name')
+    optimizer.add_argument('--momentum', type=float, default=0.9, help='optimizer momentum')
+    optimizer.add_argument('--weight-decay', type=float, default=1e-3, help='optimizer weight decay')
+    optimizer.add_argument('--nesterov', action='store_true', default=False, help='use nesterov momentum')
+    optimizer.add_argument('--betas', type=float, nargs=2, default=[0.9, 0.999], help='adam optimizer beta parameter')
+    optimizer.add_argument('--eps', type=float, default=1e-6, help='optimizer eps')
+    optimizer.add_argument('--min-lr', type=float, default=1e-6, help='lowest lr used for cosine scheduler')
+    optimizer.add_argument('--decay-rate', type=float, default=0.1, help='lr decay rate')
+    optimizer.add_argument('--restart-epoch', type=int, default=20, help='warmup restart epoch period')
+    optimizer.add_argument('--warmup-epoch', type=int, default=5, help='warmup epoch')
+
     parser.add_argument('--distil', type=int, default=0, help='choose whether to do knowledge distillation')
     parser.add_argument('--distil_type', type=str, default='hard', help='choose what type of knowledge distillation')
     # parser.add_argument('--alpha', default=300, type=float,

@@ -156,6 +156,38 @@ import torch
 import torch.nn as nn
 from timm import create_model
 
+class Flatten(nn.Module):
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x): 
+        input_shape = x.shape
+        output_shape = [input_shape[i] for i in range(self.dim)] + [-1]
+        return x.view(*output_shape)
+
+
+class TabularFeatureExtractor(nn.Module):
+    def __init__(self):
+        super(TabularFeatureExtractor, self).__init__()
+        self.embedding = nn.Sequential(
+            nn.Linear(in_features=23, out_features=128),
+            nn.BatchNorm1d(128),
+            nn.LeakyReLU(),
+            nn.Linear(in_features=128, out_features=256),
+            nn.BatchNorm1d(256),
+            nn.LeakyReLU(),
+            nn.Linear(in_features=256, out_features=512),
+            nn.BatchNorm1d(512),
+            nn.LeakyReLU(),
+            nn.Linear(in_features=512, out_features=512)
+        )
+        
+    def forward(self, x):
+        x = self.embedding(x)
+        return x
+
+
 
 class WongisMIL(nn.Module):
 
@@ -186,10 +218,10 @@ class WongisMIL(nn.Module):
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=1024, out_features=1),
-            # nn.BatchNorm1d(512),
-            # nn.ReLU(),
-            # nn.Linear(in_features=512, out_features=1),
-            # nn.Sigmoid(),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Linear(in_features=512, out_features=1),
+            nn.Sigmoid(),
         )
 
     def forward(self, image, tabular):
@@ -210,32 +242,4 @@ class WongisMIL(nn.Module):
 
         return output
 
-class Flatten(nn.Module):
-    def __init__(self, dim=1):
-        super().__init__()
-        self.dim = dim
 
-    def forward(self, x): 
-        input_shape = x.shape
-        output_shape = [input_shape[i] for i in range(self.dim)] + [-1]
-        return x.view(*output_shape)
-
-class TabularFeatureExtractor(nn.Module):
-    def __init__(self):
-        super(TabularFeatureExtractor, self).__init__()
-        self.embedding = nn.Sequential(
-            nn.Linear(in_features=23, out_features=128),
-            nn.BatchNorm1d(128),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=128, out_features=256),
-            nn.BatchNorm1d(256),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=256, out_features=512),
-            nn.BatchNorm1d(512),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=512, out_features=512)
-        )
-        
-    def forward(self, x):
-        x = self.embedding(x)
-        return x

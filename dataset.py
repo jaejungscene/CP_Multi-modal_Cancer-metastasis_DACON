@@ -79,7 +79,7 @@ def preprocess_dataset(train_df, test_df):
     return train_df, test_df
 
 
-def load_dataset(args):
+def load_dataset():
     train_df, test_df = pd.read_csv(os.path.join("data", "train.csv")), pd.read_csv(os.path.join("data", "test.csv"))
     train_df, test_df = preprocess_dataset(train_df, test_df)
     return train_df, test_df
