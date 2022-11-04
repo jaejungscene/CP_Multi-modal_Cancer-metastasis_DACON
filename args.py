@@ -4,7 +4,7 @@ result_folder_name = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 def get_args_parser():
     parser = argparse.ArgumentParser(description='training CIFAR-10, CIFAR-100 for self-directed research')
-    parser.add_argument("--fold", type = int, required = True)
+    parser.add_argument("--fold", default = 5, type = int)
     parser.add_argument('--model', default='resnet', type=str, help='networktype: resnet')
     parser.add_argument('--batch_size', default=128, type=int, metavar='N', help='mini-batch size (default: 256)')
     parser.add_argument('--lr', default=0.1, type=float, metavar='LR', help='initial learning rate')

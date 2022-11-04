@@ -27,9 +27,6 @@ warnings.filterwarnings("ignore")
 #                      if name.islower() and not name.startswith("__")
 #                      and callable(models.__dict__[name]))
 
-result_folder_name = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-
 
 def seed_everything(seed):
     random.seed(seed)

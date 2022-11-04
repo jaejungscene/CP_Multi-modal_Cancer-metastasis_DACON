@@ -195,10 +195,11 @@ class WongisMIL(nn.Module):
         self, 
         model_name, 
         num_instances= 4, 
-        num_classes=1, 
+        num_classes=1,
+        infer=False,
         pretrained=True):
         super().__init__()
-
+        self.infer = infer
         self.num_instances = num_instances
         self.encoder = create_model(
             model_name, 
@@ -226,7 +227,10 @@ class WongisMIL(nn.Module):
 
     def forward(self, image, tabular):
         # x: bs x N x C x W x W
-        bs, _, ch, w, h = image.shape
+        if self.infer:
+            bs, ch, w, h = image.shape
+        else:
+            bs, _, ch, w, h = image.shape
         # 2, 3, 3, 256, 256
         x = image.view(bs*self.num_instances, ch, w, h) # x: N bs x C x W x W
         x = self.encoder.forward_features(x) # x: N bs x C' x W' x W'
@@ -243,10 +247,19 @@ class WongisMIL(nn.Module):
         return output
 
 
-def load_model(args):
-    return WongisMIL(
-        model_name = args.model,
-        # num_instances = args.tile,
-        num_classes= 1,
-        pretrained = True
-    )
+def load_model(args, infer=False):
+    if infer:
+        return WongisMIL(
+            model_name = args.model,
+            num_instances=1,
+            num_classes= 1,
+            infer=infer,
+            pretrained = True
+        )
+    else:
+        return WongisMIL(
+            model_name = args.model,
+            num_classes= 1,
+            infer=infer,
+            pretrained = True
+        )
