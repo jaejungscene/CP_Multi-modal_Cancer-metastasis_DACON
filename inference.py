@@ -1,5 +1,11 @@
 import numpy as np
-import 
+import torch
+from dataset import CustomDataset, DataLoader
+import tqdm
+import pandas as pd
+
+device = torch.device('cuda')
+test_df = pd.read_csv('./data/test.csv')
 
 test_dataset = CustomDataset(test_df, None, test_transforms)
 test_loader = DataLoader(test_dataset, batch_size=CFG['BATCH_SIZE'], shuffle=False, num_workers=0)

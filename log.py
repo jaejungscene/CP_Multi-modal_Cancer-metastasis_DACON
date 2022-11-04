@@ -106,11 +106,11 @@ def printSave_one_epoch(epoch, args, batch_time, data_time, top1, top5, losses, 
 
 
 
-def save_checkpoint(state, is_best, args, filename='checkpoint.pth.tar'):
-    directory = "log/%s/" % (args.expname)
+def save_checkpoint(state, args, count, filename='checkpoint.pth.tar'):
+    directory = f"log/{args.expname}-{count}/"
     if not os.path.exists(directory):
         os.makedirs(directory)
     filename = directory + filename
     torch.save(state, filename)
-    if is_best:
-        shutil.copyfile(filename, 'log/%s/' % (args.expname) + 'model_best.pth.tar')
+    # if is_best:
+    #     shutil.copyfile(filename, 'log/%s/' % (args.expname) + 'model_best.pth.tar')

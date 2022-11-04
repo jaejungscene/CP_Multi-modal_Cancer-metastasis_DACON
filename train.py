@@ -3,7 +3,6 @@ from args import get_args_parser
 args = get_args_parser().parse_args()
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda
-
 import time
 import dataset
 import create
@@ -21,12 +20,12 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.models as models
-
+args.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 import warnings
 warnings.filterwarnings("ignore")
-model_names = sorted(name for name in models.__dict__
-                     if name.islower() and not name.startswith("__")
-                     and callable(models.__dict__[name]))
+# model_names = sorted(name for name in models.__dict__
+#                      if name.islower() and not name.startswith("__")
+#                      and callable(models.__dict__[name]))
 
 result_folder_name = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -51,7 +50,7 @@ import yaml
 import numpy as np
 from dataset import *
 from utils import *
-from model import common
+from model import load_model
 from metric import *
 from optimizer import get_optimizer
 # from metrics import *
@@ -60,7 +59,6 @@ import wandb
 
 def model_train(args, train_df):
     seed_everything(args.seed)
-
     skf = StratifiedKFold(n_splits = args.fold)
     label = train_df["N_category"]
     X_data = train_df.drop("N_category", axis = 1)
@@ -71,20 +69,17 @@ def model_train(args, train_df):
         train_label, valid_label = label.loc[train_index].reset_index().drop('index', axis = 1), label.loc[valid_index].reset_index().drop('index', axis = 1)
         train_dataloader, valid_dataloader = get_dataloader(train_data, valid_data, train_label, valid_label, args)
         
-        model = common.load_model(args)
+        model = load_model(args)
+        print("total params : {:,}".format(sum([p.data.nelement() for p in model.parameters()])))
         print(f"start : {count} / {args.fold} ")
         running(train_dataloader, valid_dataloader, model, args, count)
         
 
 def running(train_dataloader, valid_dataloader, model, args, count):
-    wandb.init( name = args.model + "_" + str(args.epochs) + "_" + str(count),
-                project = "DACON_Cancer_binary" + "_" + str(args.weight), reinit = True)
-
     model.to(args.device)
-    model = nn.DataParallel(model)
-    
+    optimizer, scheduler = get_optimizer(model, args)
+    model = nn.DataParallel(model).cuda()
     loss_fn = nn.BCEWithLogitsLoss().to(args.device)
-    optimizer = get_optimizer(model)
     best_score = 0
 
     for epoch in range(args.epochs):
@@ -93,17 +88,17 @@ def running(train_dataloader, valid_dataloader, model, args, count):
         
         for img, tabular, label in train_dataloader:
             img = img.permute(0, 1, 4, 2, 3)
-            img = img.float().to(args.device)   # 수정 필요
+            img = img.float().to(args.device)
             tabular = tabular.float().to(args.device)
             label = label.float().to(args.device)
             
             optimizer.zero_grad()
             model_pred = model(img, tabular)
-
+            
             loss = loss_fn(model_pred, label.reshape(-1, 1))
             loss.backward()
-
             optimizer.step()
+            scheduler.step()
             train_loss.append(loss.item())
         
         pred_labels = []
@@ -140,13 +135,14 @@ def running(train_dataloader, valid_dataloader, model, args, count):
                 'best_score': best_score,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
-            }, args)
-    
-        wandb.log({
-                "train_loss" : np.mean(train_loss),
-                "valid_loss" : np.mean(val_loss),
-                "valid_score" : val_score,
-        })
+            }, args, count)
+
+        if args.wandb:
+            wandb.log({
+                    "train_loss" : np.mean(train_loss),
+                    "valid_loss" : np.mean(val_loss),
+                    "valid_score" : val_score,
+            })
 
     
 # python main.py --action train --seed 0 --fold 5 --model densenet201 --tile 4 --epochs 300 --savepath output 
@@ -154,7 +150,15 @@ def running(train_dataloader, valid_dataloader, model, args, count):
 
     
 
-
+if __name__ == "__main__":
+    if args.wandb:
+        temp = args.model+'_'+'b'+str(args.batch_size)+'_'+args.optimizer
+        wandb.init(project="Cencer-Metastasis", entity="jaejungscene", name=temp)
+        del temp
+    train_df, test_df = load_dataset()
+    model_train(args, train_df)
+    # else: # LATER UPDATE
+        # model_infer(args, test_df)
 
 
 

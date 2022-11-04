@@ -205,7 +205,7 @@ class WongisMIL(nn.Module):
             pretrained=pretrained, 
             num_classes=num_classes)
 
-        enc_type = self.encoder.__class__.__name__
+        # enc_type = self.encoder.__class__.__name__
 
         feature_dim = self.encoder.get_classifier().in_features
         self.tabular_feature_extractor = TabularFeatureExtractor()
@@ -217,7 +217,7 @@ class WongisMIL(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(in_features=1024, out_features=1),
+            nn.Linear(in_features=1024, out_features=512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Linear(in_features=512, out_features=1),
@@ -243,3 +243,10 @@ class WongisMIL(nn.Module):
         return output
 
 
+def load_model(args):
+    return WongisMIL(
+        model_name = args.model,
+        # num_instances = args.tile,
+        num_classes= 1,
+        pretrained = True
+    )

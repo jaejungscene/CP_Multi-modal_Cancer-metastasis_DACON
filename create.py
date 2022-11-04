@@ -71,21 +71,21 @@ def create_criterion(args, numclass):
     return criterion
 
 
-def create_optimizer(args, model):
-    if args.optim == 'sgd':
-        optimizer = torch.optim.SGD(    model.parameters(), args.lr,
-                                        momentum=args.momentum,
-                                        weight_decay=args.weight_decay, nesterov=True   )
-    elif args.optim == 'adamw':
-        optimizer = torch.optim.AdamW(  model.parameters(),
-                                        args.lr,
-                                        weight_decay=args.weight_decay )
-    return optimizer
+# def create_optimizer(args, model):
+#     if args.optim == 'sgd':
+#         optimizer = torch.optim.SGD(    model.parameters(), args.lr,
+#                                         momentum=args.momentum,
+#                                         weight_decay=args.weight_decay, nesterov=True   )
+#     elif args.optim == 'adamw':
+#         optimizer = torch.optim.AdamW(  model.parameters(),
+#                                         args.lr,
+#                                         weight_decay=args.weight_decay )
+#     return optimizer
 
 
-def create_model(args, numberofclass):
-    model = getattr(RN,"ResNet")('cifar', 50,100,224)
-    print(model)
+# def create_model(args, numberofclass):
+    # model = getattr(RN,"ResNet")('cifar', 50,100,224)
+    # print(model)
     # if args.net_type == 'resnet':
     #     model = RN.ResNet(args.dataset, args.depth, numberofclass, args.insize, args.bottleneck)
     # elif args.net_type == 'se-resnet':
@@ -105,49 +105,49 @@ def create_model(args, numberofclass):
     # print(model)
     # return model
 
-create_model("asdf","sdf")
+# create_model("asdf","sdf")
 
-def create_PT_ViT(numclass, insize, num_model=0):
-    model_name = {0:'B_16', 1:'B_32', 2:'L_16', 3:'L_32'}
-    model = ViT(    
-                    model_name[num_model],
-                    pretrained=True,
-                    num_classes=numclass
-                )
-    # if insize == 32:
-    #     model.patch_embedding = nn.Conv2d(3, 7)
+# def create_PT_ViT(numclass, insize, num_model=0):
+#     model_name = {0:'B_16', 1:'B_32', 2:'L_16', 3:'L_32'}
+#     model = ViT(    
+#                     model_name[num_model],
+#                     pretrained=True,
+#                     num_classes=numclass
+#                 )
+#     # if insize == 32:
+#     #     model.patch_embedding = nn.Conv2d(3, 7)
     
-    return model
+#     return model
 
 
 
-def create_PT_DeiT(numclass, insize, distil=False, tiny=False):
-    if tiny == False:
-        if distil > 0:
-            model = torch.hub.load('facebookresearch/deit:main', 'deit_small_distilled_patch16_224', pretrained=True)
-            model.head = nn.Linear(384, numclass)
-            model.head_dist = nn.Linear(384, numclass)
-        else:
-            model = torch.hub.load('facebookresearch/deit:main', 'deit_small_patch16_224', pretrained=True)
-            model.head = nn.Linear(384, numclass)   
-    else:
-        if distil > 0:
-            model = torch.hub.load('facebookresearch/deit:main', 'deit_tiny_distilled_patch16_224', pretrained=True)
-            model.head = nn.Linear(192, numclass)
-            model.head_dist = nn.Linear(192, numclass)
-        else:
-            model = torch.hub.load('facebookresearch/deit:main', 'deit_tiny_patch16_224', pretrained=True)
-            model.head = nn.Linear(192, numclass)   
-    return model
+# def create_PT_DeiT(numclass, insize, distil=False, tiny=False):
+#     if tiny == False:
+#         if distil > 0:
+#             model = torch.hub.load('facebookresearch/deit:main', 'deit_small_distilled_patch16_224', pretrained=True)
+#             model.head = nn.Linear(384, numclass)
+#             model.head_dist = nn.Linear(384, numclass)
+#         else:
+#             model = torch.hub.load('facebookresearch/deit:main', 'deit_small_patch16_224', pretrained=True)
+#             model.head = nn.Linear(384, numclass)   
+#     else:
+#         if distil > 0:
+#             model = torch.hub.load('facebookresearch/deit:main', 'deit_tiny_distilled_patch16_224', pretrained=True)
+#             model.head = nn.Linear(192, numclass)
+#             model.head_dist = nn.Linear(192, numclass)
+#         else:
+#             model = torch.hub.load('facebookresearch/deit:main', 'deit_tiny_patch16_224', pretrained=True)
+#             model.head = nn.Linear(192, numclass)   
+#     return model
 
 
 
-def create_PT_resnet50(numclass, insize, depth):
-    if depth == 50:
-        model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        model.fc = nn.Linear(2048, numclass)
-    elif depth == 18:
-        model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        model.fc = nn.Linear(512, numclass)
-    return model
+# def create_PT_resnet50(numclass, insize, depth):
+#     if depth == 50:
+#         model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+#         model.fc = nn.Linear(2048, numclass)
+#     elif depth == 18:
+#         model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+#         model.fc = nn.Linear(512, numclass)
+#     return model
 
