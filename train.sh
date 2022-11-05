@@ -1,1 +1,1 @@
-python train.py --batch_size 64
+python train.py --fold 5 --model deit3_small_patch16_224 --batch_size 32 --epochs 100 --lr 0.1 --cuda 5 --wandb 1

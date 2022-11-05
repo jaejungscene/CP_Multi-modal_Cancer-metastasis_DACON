@@ -2,8 +2,8 @@ from torch.optim import SGD, AdamW, RMSprop
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts, MultiStepLR, StepLR, ExponentialLR, \
     LambdaLR, SequentialLR
 
-def get_optimizer(model, args):
-    args.iter_per_epoch = 32
+def get_optimizer_scheduler(model, args):
+    
     total_iter = args.epochs * args.iter_per_epoch
     warmup_iter = args.warmup_epoch * args.iter_per_epoch
 

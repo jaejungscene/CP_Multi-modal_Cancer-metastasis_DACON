@@ -17,11 +17,26 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
+from tqdm import tqdm
 import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.models as models
-args.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+from torch import LongTensor
+import typing as ty
+import yaml
+import numpy as np
+from dataset import *
+from utils import *
+from model import load_model
+from metric import *
+from optimizer import get_optimizer_scheduler
+# from metrics import *
+from sklearn.model_selection import StratifiedKFold, KFold
+import wandb
 import warnings
+
+
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 warnings.filterwarnings("ignore")
 # model_names = sorted(name for name in models.__dict__
 #                      if name.islower() and not name.startswith("__")
@@ -37,57 +52,38 @@ def seed_everything(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
-
-import os
-import torch
-import torch.nn as nn
-from torch import LongTensor
-import typing as ty
-import yaml
-import numpy as np
-from dataset import *
-from utils import *
-from model import load_model
-from metric import *
-from optimizer import get_optimizer
-# from metrics import *
-from sklearn.model_selection import StratifiedKFold, KFold
-import wandb
-
 def model_train(args, train_df):
     seed_everything(args.seed)
     skf = StratifiedKFold(n_splits = args.fold)
     label = train_df["N_category"]
     X_data = train_df.drop("N_category", axis = 1)
 
-    for train_index, valid_index in skf.split(X_data, label): 
-        count = 1
+    for idx, (train_index, valid_index) in enumerate(skf.split(X_data, label)): 
         train_data, valid_data = X_data.loc[train_index].reset_index().drop('index', axis = 1), X_data.loc[valid_index].reset_index().drop('index', axis = 1)
         train_label, valid_label = label.loc[train_index].reset_index().drop('index', axis = 1), label.loc[valid_index].reset_index().drop('index', axis = 1)
         train_dataloader, valid_dataloader = get_dataloader(train_data, valid_data, train_label, valid_label, args)
-        
+        print(len(train_label))
         model = load_model(args)
         print("total params : {:,}".format(sum([p.data.nelement() for p in model.parameters()])))
-        print(f"start : {count} / {args.fold} ")
-        running(train_dataloader, valid_dataloader, model, args, count)
+        print(f"start : {idx+1} / {args.fold} ")
+        running(train_dataloader, valid_dataloader, model, args, idx)
         
 
-def running(train_dataloader, valid_dataloader, model, args, count):
-    model.to(args.device)
-    optimizer, scheduler = get_optimizer(model, args)
+def running(train_dataloader, valid_dataloader, model, args, idx):
+    model.to(device)
+    optimizer, scheduler = get_optimizer_scheduler(model, args)
     model = nn.DataParallel(model).cuda()
-    loss_fn = nn.BCEWithLogitsLoss().to(args.device)
+    loss_fn = nn.BCEWithLogitsLoss().to(device)
     best_score = 0
-
     for epoch in range(args.epochs):
         train_loss = []
         model.train()    
         
-        for img, tabular, label in train_dataloader:
+        for img, tabular, label in tqdm(train_dataloader):
             img = img.permute(0, 1, 4, 2, 3)
-            img = img.float().to(args.device)
-            tabular = tabular.float().to(args.device)
-            label = label.float().to(args.device)
+            img = img.float().to(device)
+            tabular = tabular.float().to(device)
+            label = label.float().to(device)
             
             optimizer.zero_grad()
             model_pred = model(img, tabular)
@@ -108,9 +104,9 @@ def running(train_dataloader, valid_dataloader, model, args, count):
         for img, tabular, label in valid_dataloader:
             true_labels += label.tolist()
             img = img.permute(0, 1, 4, 2, 3)
-            img = img.float().to(args.device)
-            tabular = tabular.float().to(args.device)
-            label = label.float().to(args.device)
+            img = img.float().to(device)
+            tabular = tabular.float().to(device)
+            label = label.float().to(device)
                 
             model_pred = model(img, tabular)
             
@@ -121,8 +117,8 @@ def running(train_dataloader, valid_dataloader, model, args, count):
             model_pred = model_pred.squeeze(1).to('cpu')  
             pred_labels += model_pred.tolist()
     
-        pred_labels = np.where(np.array(pred_labels) > threshold, 1, 0)
-        val_score = get_f1_score(true_labels, pred_labels, args)
+        pred_labels = np.where(np.array(pred_labels) > threshold, 1, 0) # threshold 이상이면, binary vector로 변환
+        val_score = get_f1_score(true_labels, pred_labels)
         
 
         if best_score < val_score:
@@ -132,7 +128,7 @@ def running(train_dataloader, valid_dataloader, model, args, count):
                 'best_score': best_score,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
-            }, args, count)
+            }, args, idx)
 
         if args.wandb:
             wandb.log({

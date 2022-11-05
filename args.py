@@ -17,7 +17,6 @@ def get_args_parser():
     parser.add_argument('--device', default="cuda:0", type=str)
     parser.add_argument('--cude', default="0", type=str)
 
-
     optimizer = parser.add_argument_group('optimizer')
     optimizer.add_argument('--optimizer', type=str, default='adamw', help='optimizer name')
     optimizer.add_argument('--momentum', type=float, default=0.9, help='optimizer momentum')
@@ -26,16 +25,16 @@ def get_args_parser():
     optimizer.add_argument('--betas', type=float, nargs=2, default=[0.9, 0.999], help='adam optimizer beta parameter')
     optimizer.add_argument('--eps', type=float, default=1e-6, help='optimizer eps')
     optimizer.add_argument('--decay-rate', type=float, default=0.1, help='lr decay rate')
-    optimizer.add_argument('--restart-epoch', type=int, default=20, help='warmup restart epoch period')
-    optimizer.add_argument('--warmup-epoch', type=int, default=5, help='warmup epoch')
-    optimizer.add_argument('--iter-per-epoch', type=int, default=32, help='warmup epoch')
 
     scheduler = parser.add_argument_group('scheduler')
+    scheduler.add_argument('--iter-per-epoch', type=int, default=32, help='warmup epoch')
+    scheduler.add_argument('--restart-epoch', type=int, default=20, help='warmup restart epoch period')
     scheduler.add_argument('--scheduler', type=str, default='cosine', help='lr scheduler')
     scheduler.add_argument('--three-phase', action='store_true', help='one cycle lr three phase')
     scheduler.add_argument('--step-size', type=int, default=2, help='lr decay step size')
     scheduler.add_argument('--min-lr', type=float, default=1e-6, help='lowest lr used for cosine scheduler')
     scheduler.add_argument('--milestones', type=int, nargs='+', default=[150, 225], help='multistep lr decay step')
+    scheduler.add_argument('--warmup-epoch', type=int, default=5, help='warmup epoch')
     scheduler.add_argument('--warmup-scheduler', type=str, default='linear', help='warmup lr scheduler type')
     scheduler.add_argument('--warmup-lr', type=float, default=1e-4, help='warmup start lr')
 

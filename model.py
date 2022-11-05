@@ -1,11 +1,33 @@
 import torch
 import torch.nn as nn
+import torchvision.models as models
+from timm import create_model
+
+def load_model(args, infer=False):
+    if infer:
+        return WongisMIL(
+            model_name = args.model,
+            num_instances=1,
+            num_classes= 1,
+            infer=infer,
+            pretrained = True
+        )
+    else:
+        if args.model=="resnet50":
+            return WongisMIL(
+                model_name = args.model,
+                num_classes= 1,
+                infer=infer,
+                pretrained = True
+            )
+        elif args.model=="base":
+            return ClassificationModel()
+
 
 def conv3x3(in_channel, out_channel, stride=1):
     "3x3 convolution with padding"
     return nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride,
                      padding=1, bias=False)
-
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -43,7 +65,6 @@ class BasicBlock(nn.Module):
         out = self.relu(out)
 
         return out
-
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -88,7 +109,6 @@ class Bottleneck(nn.Module):
 
         return out
 
-
 class ConvNormAct(nn.Sequential):
     def __init__(self, in_ch, out_ch, kernel_size, stride=1, padding=0, groups=1, bias=True, norm_layer=nn.BatchNorm2d, act=True):
         super(ConvNormAct,self).__init__(
@@ -96,8 +116,6 @@ class ConvNormAct(nn.Sequential):
             norm_layer(out_ch) if norm_layer != nn.Identity() else nn.Identity(),
             nn.ReLU(inplace=True) if act else nn.Identity()
         )
-
-
 
 class SEblock(nn.Sequential):
     def __init__(self, channel, r=16):
@@ -114,8 +132,6 @@ class SEblock(nn.Sequential):
     def forward(self, x):
         out = super(SEblock, self).forward(x)
         return x + out
-
-
 
 class CBAM(nn.Module):
     def __init__(self, channel, r=16):
@@ -152,9 +168,7 @@ class CBAM(nn.Module):
 
 
 
-import torch
-import torch.nn as nn
-from timm import create_model
+
 
 class Flatten(nn.Module):
     def __init__(self, dim=1):
@@ -165,6 +179,7 @@ class Flatten(nn.Module):
         input_shape = x.shape
         output_shape = [input_shape[i] for i in range(self.dim)] + [-1]
         return x.view(*output_shape)
+
 
 
 class TabularFeatureExtractor(nn.Module):
@@ -247,19 +262,34 @@ class WongisMIL(nn.Module):
         return output
 
 
-def load_model(args, infer=False):
-    if infer:
-        return WongisMIL(
-            model_name = args.model,
-            num_instances=1,
-            num_classes= 1,
-            infer=infer,
-            pretrained = True
+
+
+class ImgFeatureExtractor(nn.Module):
+    def __init__(self):
+        super(ImgFeatureExtractor, self).__init__()
+        self.backbone = models.efficientnet_b0(pretrained=True)
+        self.embedding = nn.Linear(1000,512)
+        
+    def forward(self, x):
+        x = self.backbone(x)
+        x = self.embedding(x)
+        return x
+
+
+
+class ClassificationModel(nn.Module):
+    def __init__(self):
+        super(ClassificationModel, self).__init__()
+        self.img_feature_extractor = ImgFeatureExtractor()
+        self.tabular_feature_extractor = TabularFeatureExtractor()
+        self.classifier = nn.Sequential(
+            nn.Linear(in_features=1024, out_features=1),
+            nn.Sigmoid(),
         )
-    else:
-        return WongisMIL(
-            model_name = args.model,
-            num_classes= 1,
-            infer=infer,
-            pretrained = True
-        )
+        
+    def forward(self, img, tabular):
+        img_feature = self.img_feature_extractor(img)
+        tabular_feature = self.tabular_feature_extractor(tabular)
+        feature = torch.cat([img_feature, tabular_feature], dim=-1)
+        output = self.classifier(feature)
+        return output
