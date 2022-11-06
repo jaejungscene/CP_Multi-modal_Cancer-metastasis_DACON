@@ -1,22 +1,22 @@
 import os
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
+os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3"
 
 import wandb
 from datetime import datetime
-date = datetime.now().strftime("%d-%m-%y,%H:%M:%S")
+temp = datetime.now().strftime("%d-%m-%y,%H:%M:%S")
+wandb.init(project="Cencer-Metastasis", entity="jaejungscene", name=temp)
+del temp
+
 CFG = {
-    'IMG_SIZE':512,
-    'EPOCHS':30,
+    'IMG_SIZE':528,
+    'EPOCHS':20,
     'LEARNING_RATE':1e-4,
     'BATCH_SIZE':16,
     'SEED':41,
-    "MODEL":"convnext_base"
+    "MODEL":"efficientnet_b6"
 }
-temp = CFG["MODEL"]+"-"+str(CFG["IMG_SIZE"])+date
-wandb.init(project="Cencer-Metastasis", entity="jaejungscene", name=temp)
-for key, value in zip(CFG.keys(), CFG.values()):
-    print(f"{key:20}\t{value}")
+print(CFG)
 
 
 import random
@@ -211,7 +211,9 @@ class TabularFeatureExtractor(nn.Module):
         
         
     def forward(self, x):
+        # res = nn.Linear(in_features=23, out_features=512)(x)
         x = self.embedding(x)
+        # x = res+x
         return x
     
 
@@ -225,13 +227,7 @@ class ClassificationModel(nn.Module):
         self.img_feature_extractor = ImgFeatureExtractor()
         self.tabular_feature_extractor = TabularFeatureExtractor()
         self.classifier = nn.Sequential(
-            nn.Linear(in_features=1024, out_features=512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(),
-            nn.Linear(in_features=512, out_features=128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Linear(in_features=128, out_features=1),
+            nn.Linear(in_features=1024, out_features=1),
             # nn.Sigmoid(),
         )
         
@@ -379,4 +375,4 @@ preds = inference(infer_model, test_loader, device)
 sample_dir = "/home/ljj0512/private/workspace/CP_Multi-modal_Cencer-metastasis_DACON/data/sample_submission.csv"
 submit = pd.read_csv(sample_dir)
 submit['N_category'] = preds
-submit.to_csv(f'./{temp}_submit.csv', index=False)
+submit.to_csv('./submit01.csv', index=False)
