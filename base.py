@@ -1,7 +1,3 @@
-import os
-os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES'] = "2,3"
-
 import wandb
 from datetime import datetime
 date = datetime.now().strftime("%d-%m-%y,%H:%M:%S")
@@ -11,13 +7,18 @@ CFG = {
     'LEARNING_RATE':1e-4,
     'BATCH_SIZE':16,
     'SEED':41,
-    "MODEL":"convnext_base"
+    "MODEL":"efficientnet_b4",
+    "gpu":"1",
+    "momentum":0.9
 }
 temp = CFG["MODEL"]+"-"+str(CFG["IMG_SIZE"])+date
 wandb.init(project="Cencer-Metastasis", entity="jaejungscene", name=temp)
 for key, value in zip(CFG.keys(), CFG.values()):
     print(f"{key:20}\t{value}")
 
+import os
+os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+os.environ['CUDA_VISIBLE_DEVICES'] = CFG["gpu"]
 
 import random
 import pandas as pd
@@ -37,10 +38,10 @@ from albumentations.pytorch.transforms import ToTensorV2
 
 import torchvision.models as models
 from timm import create_model
-
+from customScheduler import CosineAnnealingWarmUpRestarts
 from sklearn import metrics
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 
 import warnings
@@ -156,13 +157,13 @@ train_transforms = A.Compose([
                             A.VerticalFlip(),
                             A.Rotate(limit=90, border_mode=cv2.BORDER_CONSTANT,p=0.3),
                             A.Resize(CFG['IMG_SIZE'],CFG['IMG_SIZE']),
-                            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0),
+                            # A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0),
                             ToTensorV2()
                             ])
 
 test_transforms = A.Compose([
                             A.Resize(CFG['IMG_SIZE'],CFG['IMG_SIZE']),
-                            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0),
+                            # A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), max_pixel_value=255.0, always_apply=False, p=1.0),
                             ToTensorV2()
                             ])
 
@@ -174,7 +175,6 @@ train_loader = DataLoader(train_dataset, batch_size = CFG['BATCH_SIZE'], shuffle
 
 val_dataset = CustomDataset(val_df, val_labels.values, test_transforms)
 val_loader = DataLoader(val_dataset, batch_size=CFG['BATCH_SIZE'], shuffle=False, num_workers=0)
-
 
 
 
@@ -196,22 +196,34 @@ class ImgFeatureExtractor(nn.Module):
 class TabularFeatureExtractor(nn.Module):
     def __init__(self):
         super(TabularFeatureExtractor, self).__init__()
-        self.embedding = nn.Sequential(
-            nn.Linear(in_features=23, out_features=128),
-            nn.BatchNorm1d(128),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=128, out_features=256),
-            nn.BatchNorm1d(256),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=256, out_features=512),
+        self.layer1 = nn.Sequential(
+            nn.Linear(in_features=23, out_features=512),
             nn.BatchNorm1d(512),
             nn.LeakyReLU(),
+        )
+        self.layer2 = nn.Sequential(
             nn.Linear(in_features=512, out_features=512),
+            nn.BatchNorm1d(512),
+            nn.LeakyReLU(),
+        )
+        self.layer3 = nn.Sequential(
+            nn.Linear(in_features=512, out_features=512),
+            nn.BatchNorm1d(512),
+            nn.LeakyReLU(),
+        )
+        self.layer4 = nn.Sequential(
+            nn.Linear(in_features=512, out_features=512),
+            nn.BatchNorm1d(512),
+            nn.LeakyReLU(),
         )
         
         
     def forward(self, x):
-        x = self.embedding(x)
+        x = self.layer1(x)
+        res = x
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = res+x
         return x
     
 
@@ -275,7 +287,7 @@ def validation(model, criterion, val_loader, device):
 
 
 
-
+lr_list = []
 def train(model, optimizer, train_loader, val_loader, scheduler, device):
     model.to(device)
     criterion = nn.BCEWithLogitsLoss().to(device)
@@ -299,6 +311,8 @@ def train(model, optimizer, train_loader, val_loader, scheduler, device):
             
             loss.backward()
             optimizer.step()
+            scheduler.step()
+            lr_list.append(scheduler.get_lr())
             
             train_loss.append(loss.item())
         val_loss, val_score = validation(model, criterion, val_loader, device)
@@ -308,8 +322,6 @@ def train(model, optimizer, train_loader, val_loader, scheduler, device):
                     "valid_loss" : val_loss,
                     "valid_score" : val_score,
         })
-        if scheduler is not None:
-            scheduler.step(val_score)
         
         if best_score < val_score:
             best_score = val_score
@@ -338,9 +350,15 @@ print("params: {:,}".format(sum([p.data.nelement() for p in model.parameters()])
 print()
 model = nn.DataParallel(model)
 model.eval()
-optimizer = torch.optim.Adam(params = model.parameters(), lr = CFG["LEARNING_RATE"])
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=1, threshold_mode='abs',min_lr=1e-8, verbose=True)
+
+# optimizer = torch.optim.Adam(params = model.parameters(), lr = CFG["LEARNING_RATE"])
+# optimizer = torch.optim.AdamW(model.parameters(), CFG["LEARNING_RATE"], betas=[0.9, 0.999], eps=1e-6, weight_decay=1e-3)
+optimizer = torch.optim.SGD(model.parameters(), lr=CFG["LEARNING_RATE"], momentum=CFG["momentum"], nesterov=True)
+
+# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=1, threshold_mode='abs',min_lr=1e-8, verbose=True)
+scheduler = CosineAnnealingWarmUpRestarts(optimizer, T_0=CFG["EPOCHS"]*len(train_loader)//4, T_mult=1, eta_max=0.09,  T_up=5, gamma=0.5)
 # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG["EPOCHS"]/5, eta_min=1e-8)
+
 infer_model = train(model, optimizer, train_loader, val_loader, scheduler, device)
 
 # checkpoint = torch.load("/home/ljj0512/private/workspace/CP_Multi-modal_Cencer-metastasis_DACON/log/base/checkpoint.pth.tar")
@@ -348,7 +366,7 @@ infer_model = train(model, optimizer, train_loader, val_loader, scheduler, devic
 # infer_model.load_state_dict(checkpoint["state_dict"])
 
 test_dataset = CustomDataset(test_df, None, test_transforms, test=True)
-test_loader = DataLoader(test_dataset, batch_size=CFG['BATCH_SIZE'], shuffle=False, num_workers=1)
+test_loader = DataLoader(test_dataset, batch_size=CFG['BATCH_SIZE'], shuffle=False, num_workers=4)
 
 def inference(model, test_loader, device):
     # model.to(device)
@@ -380,3 +398,5 @@ sample_dir = "/home/ljj0512/private/workspace/CP_Multi-modal_Cencer-metastasis_D
 submit = pd.read_csv(sample_dir)
 submit['N_category'] = preds
 submit.to_csv(f'./{temp}_submit.csv', index=False)
+plt.plot(lr_list)
+plt.savefig("lr_graph.png")
